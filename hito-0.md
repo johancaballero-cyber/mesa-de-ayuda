@@ -1,7 +1,7 @@
 # Hito 0: Propuesta y modelo inicial
 
 **Proyecto:** Sistema de Mesa de Ayuda  
-**Estudiante:** Johan Emilio Caballero  
+**Estudiante:** Johan Emilio Caballero, Luis Quintero  
 **Fecha:** 9 de octubre de 2026
 
 ## 1. Situación y usuario
