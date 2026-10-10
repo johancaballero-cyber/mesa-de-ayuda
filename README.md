@@ -10,7 +10,8 @@ El sistema permitirá registrar tickets, consultar sus detalles y cambiar su est
 
 ## Integrante
 
-- Johan Emilio Caballero
+- Johan Caballero
+- Luis Quintero
 
 ## Tecnologías que se utilizarán
 
