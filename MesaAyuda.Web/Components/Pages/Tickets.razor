@@ -1,0 +1,70 @@
+﻿@page "/tickets"
+@rendermode InteractiveServer
+@using MesaAyuda.Web.Models
+@using MesaAyuda.Web.Services
+@inject ITicketService TicketService
+
+<PageTitle>Tickets - Mesa de Ayuda</PageTitle>
+
+<h3>Tickets registrados</h3>
+
+@if (cargando)
+{
+    <p>Cargando tickets...</p>
+}
+else if (!string.IsNullOrEmpty(error))
+{
+    <div class="alert alert-danger">
+        @error
+    </div>
+}
+else if (tickets.Count == 0)
+{
+    <p>No hay tickets registrados.</p>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Título</th>
+                <th>Categoría</th>
+                <th>Estado</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var ticket in tickets)
+            {
+                <tr>
+                    <td>@ticket.Id</td>
+                    <td>@ticket.Titulo</td>
+                    <td>@ticket.CategoriaNombre</td>
+                    <td>@ticket.Estado</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<MesaAyuda.Web.Models.Ticket> tickets = new();
+    private bool cargando = true;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            tickets = await TicketService.ObtenerTodosAsync();
+        }
+        catch (Exception)
+        {
+            error = "No se pudieron recuperar los tickets de MySQL.";
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+}
