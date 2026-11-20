@@ -8,6 +8,31 @@
 
 <h3>Tickets registrados</h3>
 
+
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card text-center p-3">
+            <h5>Total de tickets</h5>
+            <h2>@TotalTickets</h2>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card text-center p-3">
+            <h5>Tickets abiertos</h5>
+            <h2>@TicketsAbiertos</h2>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card text-center p-3">
+            <h5>Tickets cerrados</h5>
+            <h2>@TicketsCerrados</h2>
+        </div>
+    </div>
+</div>
+
+
 @if (cargando)
 {
     <p>Cargando tickets...</p>
@@ -49,10 +74,19 @@ else
 
 @code {
     private List<MesaAyuda.Web.Models.Ticket> tickets = new();
+
+    private int TotalTickets => tickets.Count;
+
+    private int TicketsAbiertos =>
+        tickets.Count(t => t.Estado == "Abierto");
+
+    private int TicketsCerrados =>
+        tickets.Count(t => t.Estado == "Cerrado");
     private bool cargando = true;
     private string? error;
 
     protected override async Task OnInitializedAsync()
+
     {
         try
         {
