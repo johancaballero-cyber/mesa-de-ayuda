@@ -33,6 +33,21 @@
 </div>
 
 
+<div class="mb-3">
+    <label for="filtroEstado" class="form-label">
+        Filtrar tickets por estado:
+    </label>
+
+    <select id="filtroEstado"
+            class="form-select"
+            @bind="estadoSeleccionado">
+        <option value="Todos">Todos los tickets</option>
+        <option value="Abierto">Abiertos</option>
+        <option value="Cerrado">Cerrados</option>
+    </select>
+</div>
+
+
 @if (cargando)
 {
     <p>Cargando tickets...</p>
@@ -59,7 +74,7 @@ else
             </tr>
         </thead>
         <tbody>
-            @foreach (var ticket in tickets)
+            @foreach (var ticket in TicketsFiltrados)
             {
                 <tr>
                     <td>@ticket.Id</td>
@@ -82,6 +97,16 @@ else
 
     private int TicketsCerrados =>
         tickets.Count(t => t.Estado == "Cerrado");
+
+        
+    private string estadoSeleccionado = "Todos";
+
+    private IEnumerable<MesaAyuda.Web.Models.Ticket> TicketsFiltrados =>
+        estadoSeleccionado == "Todos"
+            ? tickets
+            : tickets.Where(t => t.Estado == estadoSeleccionado);
+
+
     private bool cargando = true;
     private string? error;
 
