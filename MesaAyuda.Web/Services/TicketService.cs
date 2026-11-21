@@ -218,15 +218,39 @@ public class TicketService : ITicketService
         return Convert.ToInt32(await consulta.ExecuteScalarAsync()) > 0;
     }
 
-    public Task<bool> CerrarAsync(int id)
+    public async Task<bool> CerrarAsync(int id)
     {
-        throw new NotImplementedException(
-            "El cierre todavía no está implementado.");
+        await using var conexion =
+            new MySqlConnection(_connectionString);
+
+        await conexion.OpenAsync();
+
+        // Solo cierra tickets que sigan abiertos.
+        const string sql = """
+            UPDATE tickets
+            SET estado = 'Cerrado',
+                fecha_cierre = NOW()
+            WHERE id = @id AND estado = 'Abierto';
+            """;
+
+        await using var comando = new MySqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@id", id);
+
+        return await comando.ExecuteNonQueryAsync() > 0;
     }
 
-    public Task<bool> EliminarAsync(int id)
+    public async Task<bool> EliminarAsync(int id)
     {
-        throw new NotImplementedException(
-            "La eliminación todavía no está implementada.");
+        await using var conexion =
+            new MySqlConnection(_connectionString);
+
+        await conexion.OpenAsync();
+
+        const string sql = "DELETE FROM tickets WHERE id = @id;";
+
+        await using var comando = new MySqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@id", id);
+
+        return await comando.ExecuteNonQueryAsync() > 0;
     }
 }

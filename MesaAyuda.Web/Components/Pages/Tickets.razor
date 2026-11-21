@@ -3,6 +3,7 @@
 @using MesaAyuda.Web.Models
 @using MesaAyuda.Web.Services
 @inject ITicketService TicketService
+@inject IJSRuntime JS
 
 <PageTitle>Tickets - Mesa de Ayuda</PageTitle>
 
@@ -143,6 +144,17 @@ else
                                 @onclick="() => IniciarEdicionAsync(ticket.Id)">
                             Editar
                         </button>
+                        @if (!ticket.EstaCerrado)
+                        {
+                            <button class="btn btn-sm btn-outline-success ms-1"
+                                    @onclick="() => CerrarAsync(ticket.Id)">
+                                Cerrar
+                            </button>
+                        }
+                        <button class="btn btn-sm btn-outline-danger ms-1"
+                                @onclick="() => EliminarAsync(ticket.Id)">
+                            Eliminar
+                        </button>
                     </td>
                 </tr>
             }
@@ -187,7 +199,7 @@ else
 
 
     private List<Categoria> categorias = new();
-    private Ticket? ticketSeleccionado;
+    private MesaAyuda.Web.Models.Ticket? ticketSeleccionado;
 
     private int? editandoId;
     private string formTitulo = string.Empty;
@@ -313,7 +325,7 @@ else
         guardando = true;
         try
         {
-            var ticket = new Ticket
+            var ticket = new MesaAyuda.Web.Models.Ticket
             {
                 Id = editandoId ?? 0,
                 Titulo = formTitulo,
@@ -354,6 +366,79 @@ else
         finally
         {
             guardando = false;
+        }
+    }
+
+    private async Task CerrarAsync(int id)
+    {
+        LimpiarMensajes();
+        try
+        {
+            var ticket = await TicketService.ObtenerPorIdAsync(id);
+            if (ticket == null)
+            {
+                mensajeError = "El ticket seleccionado ya no existe.";
+                await RecargarAsync();
+                return;
+            }
+
+            if (ticket.EstaCerrado)
+            {
+                mensajeError = $"El ticket #{id} ya está cerrado.";
+                return;
+            }
+
+            if (await TicketService.CerrarAsync(id))
+            {
+                mensajeExito = $"Ticket #{id} cerrado correctamente.";
+            }
+            else
+            {
+                mensajeError = "No se pudo cerrar el ticket.";
+            }
+
+            await RecargarAsync();
+        }
+        catch (Exception)
+        {
+            mensajeError = "Ocurrió un error al cerrar el ticket en MySQL.";
+        }
+    }
+
+    private async Task EliminarAsync(int id)
+    {
+        LimpiarMensajes();
+
+        var confirmado = await JS.InvokeAsync<bool>(
+            "confirm", $"¿Seguro que desea eliminar el ticket #{id}?");
+
+        if (!confirmado)
+        {
+            return;
+        }
+
+        try
+        {
+            if (await TicketService.EliminarAsync(id))
+            {
+                if (ticketSeleccionado?.Id == id)
+                    ticketSeleccionado = null;
+
+                if (editandoId == id)
+                    LimpiarFormulario();
+
+                mensajeExito = $"Ticket #{id} eliminado correctamente.";
+            }
+            else
+            {
+                mensajeError = "El ticket no existe o ya fue eliminado.";
+            }
+
+            await RecargarAsync();
+        }
+        catch (Exception)
+        {
+            mensajeError = "Ocurrió un error al eliminar el ticket en MySQL.";
         }
     }
 }
