@@ -59,8 +59,44 @@ public class TicketService : ITicketService
 
     public async Task<Ticket?> ObtenerPorIdAsync(int id)
     {
-        var tickets = await ObtenerTodosAsync();
-        return tickets.FirstOrDefault(t => t.Id == id);
+        await using var conexion =
+            new MySqlConnection(_connectionString);
+
+        await conexion.OpenAsync();
+
+        const string sql = """
+            SELECT t.id, t.titulo, t.descripcion,
+                   t.categoria_id, c.nombre AS categoria_nombre,
+                   t.estado, t.fecha_creacion, t.fecha_cierre
+            FROM tickets t
+            INNER JOIN categorias c ON t.categoria_id = c.id
+            WHERE t.id = @id;
+            """;
+
+        await using var comando = new MySqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@id", id);
+
+        await using var lector = await comando.ExecuteReaderAsync();
+
+        if (!await lector.ReadAsync())
+        {
+            return null;
+        }
+
+        return new Ticket
+        {
+            Id = lector.GetInt32("id"),
+            Titulo = lector.GetString("titulo"),
+            Descripcion = lector.GetString("descripcion"),
+            CategoriaId = lector.GetInt32("categoria_id"),
+            CategoriaNombre = lector.GetString("categoria_nombre"),
+            Estado = lector.GetString("estado"),
+            FechaCreacion = lector.GetDateTime("fecha_creacion"),
+            FechaCierre = lector.IsDBNull(
+                lector.GetOrdinal("fecha_cierre"))
+                ? null
+                : lector.GetDateTime("fecha_cierre")
+        };
     }
 
     public async Task<List<Categoria>> ObtenerCategoriasAsync()
@@ -90,16 +126,96 @@ public class TicketService : ITicketService
         return categorias;
     }
 
-    public Task<int> CrearAsync(Ticket ticket)
+    private static void Validar(Ticket ticket)
     {
-        throw new NotImplementedException(
-            "La creación de tickets todavía no está implementada.");
+        if (string.IsNullOrWhiteSpace(ticket.Titulo))
+            throw new ArgumentException("El título no puede estar vacío.");
+
+        if (ticket.Titulo.Trim().Length > 150)
+            throw new ArgumentException(
+                "El título no puede superar los 150 caracteres.");
+
+        if (string.IsNullOrWhiteSpace(ticket.Descripcion))
+            throw new ArgumentException(
+                "La descripción no puede estar vacía.");
     }
 
-    public Task<bool> ActualizarAsync(Ticket ticket)
+    private static async Task<bool> CategoriaExisteAsync(
+        MySqlConnection conexion, int categoriaId)
     {
-        throw new NotImplementedException(
-            "La actualización todavía no está implementada.");
+        const string sql =
+            "SELECT COUNT(*) FROM categorias WHERE id = @id;";
+
+        await using var comando = new MySqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@id", categoriaId);
+
+        var total = Convert.ToInt32(await comando.ExecuteScalarAsync());
+        return total > 0;
+    }
+
+    public async Task<int> CrearAsync(Ticket ticket)
+    {
+        Validar(ticket);
+
+        await using var conexion =
+            new MySqlConnection(_connectionString);
+
+        await conexion.OpenAsync();
+
+        if (!await CategoriaExisteAsync(conexion, ticket.CategoriaId))
+            throw new ArgumentException("La categoría seleccionada no existe.");
+
+        const string sql = """
+            INSERT INTO tickets (titulo, descripcion, categoria_id, estado)
+            VALUES (@titulo, @descripcion, @categoriaId, 'Abierto');
+            SELECT LAST_INSERT_ID();
+            """;
+
+        await using var comando = new MySqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@titulo", ticket.Titulo.Trim());
+        comando.Parameters.AddWithValue(
+            "@descripcion", ticket.Descripcion.Trim());
+        comando.Parameters.AddWithValue("@categoriaId", ticket.CategoriaId);
+
+        return Convert.ToInt32(await comando.ExecuteScalarAsync());
+    }
+
+    public async Task<bool> ActualizarAsync(Ticket ticket)
+    {
+        Validar(ticket);
+
+        await using var conexion =
+            new MySqlConnection(_connectionString);
+
+        await conexion.OpenAsync();
+
+        if (!await CategoriaExisteAsync(conexion, ticket.CategoriaId))
+            throw new ArgumentException("La categoría seleccionada no existe.");
+
+        const string sql = """
+            UPDATE tickets
+            SET titulo = @titulo,
+                descripcion = @descripcion,
+                categoria_id = @categoriaId
+            WHERE id = @id;
+            """;
+
+        await using var comando = new MySqlCommand(sql, conexion);
+        comando.Parameters.AddWithValue("@titulo", ticket.Titulo.Trim());
+        comando.Parameters.AddWithValue(
+            "@descripcion", ticket.Descripcion.Trim());
+        comando.Parameters.AddWithValue("@categoriaId", ticket.CategoriaId);
+        comando.Parameters.AddWithValue("@id", ticket.Id);
+
+        // Se usa "Found rows" implícito: si los valores no cambian MySqlConnector
+        // reporta 0 filas, por eso se verifica la existencia aparte.
+        var filas = await comando.ExecuteNonQueryAsync();
+        if (filas > 0) return true;
+
+        const string existe = "SELECT COUNT(*) FROM tickets WHERE id = @id;";
+        await using var consulta = new MySqlCommand(existe, conexion);
+        consulta.Parameters.AddWithValue("@id", ticket.Id);
+        return Convert.ToInt32(await consulta.ExecuteScalarAsync()) > 0;
     }
 
     public Task<bool> CerrarAsync(int id)

@@ -8,6 +8,58 @@
 
 <h3>Tickets registrados</h3>
 
+@if (!string.IsNullOrEmpty(mensajeExito))
+{
+    <div class="alert alert-success">@mensajeExito</div>
+}
+
+@if (!string.IsNullOrEmpty(mensajeError))
+{
+    <div class="alert alert-danger">@mensajeError</div>
+}
+
+<div class="card p-3 mb-4">
+    <h5>@(editandoId == null ? "Registrar nuevo ticket" : $"Editar ticket #{editandoId}")</h5>
+
+    <div class="mb-2">
+        <label class="form-label" for="titulo">Título</label>
+        <input id="titulo" class="form-control" maxlength="150"
+               @bind="formTitulo" @bind:event="oninput" />
+    </div>
+
+    <div class="mb-2">
+        <label class="form-label" for="descripcion">Descripción</label>
+        <textarea id="descripcion" class="form-control" rows="3"
+                  @bind="formDescripcion" @bind:event="oninput"></textarea>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label" for="categoria">Categoría</label>
+        <select id="categoria" class="form-select" @bind="formCategoriaId">
+            <option value="0">Seleccione una categoría</option>
+            @foreach (var categoria in categorias)
+            {
+                <option value="@categoria.Id">@categoria.Nombre</option>
+            }
+        </select>
+    </div>
+
+    <div>
+        <button class="btn btn-primary me-2" @onclick="GuardarAsync"
+                disabled="@guardando">
+            @(editandoId == null ? "Registrar ticket" : "Guardar cambios")
+        </button>
+
+        @if (editandoId != null)
+        {
+            <button class="btn btn-secondary" @onclick="CancelarEdicion"
+                    disabled="@guardando">
+                Cancelar edición
+            </button>
+        }
+    </div>
+</div>
+
 
 <div class="row mb-4">
     <div class="col-md-4">
@@ -71,20 +123,47 @@ else
                 <th>Título</th>
                 <th>Categoría</th>
                 <th>Estado</th>
+                <th>Acciones</th>
             </tr>
         </thead>
         <tbody>
             @foreach (var ticket in TicketsFiltrados)
             {
-                <tr>
+                <tr class="@(ticketSeleccionado?.Id == ticket.Id ? "table-primary" : "")">
                     <td>@ticket.Id</td>
                     <td>@ticket.Titulo</td>
                     <td>@ticket.CategoriaNombre</td>
                     <td>@ticket.Estado</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary me-1"
+                                @onclick="() => SeleccionarAsync(ticket.Id)">
+                            Ver
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary"
+                                @onclick="() => IniciarEdicionAsync(ticket.Id)">
+                            Editar
+                        </button>
+                    </td>
                 </tr>
             }
         </tbody>
     </table>
+}
+
+@if (ticketSeleccionado != null)
+{
+    <div class="card p-3 mt-3">
+        <h5>Detalle del ticket #@ticketSeleccionado.Id</h5>
+        <p><strong>Título:</strong> @ticketSeleccionado.Titulo</p>
+        <p><strong>Descripción:</strong> @ticketSeleccionado.Descripcion</p>
+        <p><strong>Categoría:</strong> @ticketSeleccionado.CategoriaNombre</p>
+        <p><strong>Estado:</strong> @ticketSeleccionado.Estado</p>
+        <p><strong>Fecha de creación:</strong> @ticketSeleccionado.FechaCreacion.ToString("dd/MM/yyyy HH:mm")</p>
+        <p>
+            <strong>Fecha de cierre:</strong>
+            @(ticketSeleccionado.FechaCierre?.ToString("dd/MM/yyyy HH:mm") ?? "—")
+        </p>
+    </div>
 }
 
 @code {
@@ -107,14 +186,26 @@ else
             : tickets.Where(t => t.Estado == estadoSeleccionado);
 
 
+    private List<Categoria> categorias = new();
+    private Ticket? ticketSeleccionado;
+
+    private int? editandoId;
+    private string formTitulo = string.Empty;
+    private string formDescripcion = string.Empty;
+    private int formCategoriaId;
+    private bool guardando;
+
+    private string? mensajeExito;
+    private string? mensajeError;
+
     private bool cargando = true;
     private string? error;
 
     protected override async Task OnInitializedAsync()
-
     {
         try
         {
+            categorias = await TicketService.ObtenerCategoriasAsync();
             tickets = await TicketService.ObtenerTodosAsync();
         }
         catch (Exception)
@@ -124,6 +215,145 @@ else
         finally
         {
             cargando = false;
+        }
+    }
+
+    private void LimpiarMensajes()
+    {
+        mensajeExito = null;
+        mensajeError = null;
+    }
+
+    private void LimpiarFormulario()
+    {
+        editandoId = null;
+        formTitulo = string.Empty;
+        formDescripcion = string.Empty;
+        formCategoriaId = 0;
+    }
+
+    private async Task RecargarAsync()
+    {
+        tickets = await TicketService.ObtenerTodosAsync();
+
+        if (ticketSeleccionado != null)
+        {
+            ticketSeleccionado =
+                await TicketService.ObtenerPorIdAsync(ticketSeleccionado.Id);
+        }
+    }
+
+    private async Task SeleccionarAsync(int id)
+    {
+        LimpiarMensajes();
+        try
+        {
+            ticketSeleccionado = await TicketService.ObtenerPorIdAsync(id);
+            if (ticketSeleccionado == null)
+                mensajeError = "El ticket seleccionado ya no existe.";
+        }
+        catch (Exception)
+        {
+            mensajeError = "No se pudo consultar el ticket en MySQL.";
+        }
+    }
+
+    private async Task IniciarEdicionAsync(int id)
+    {
+        LimpiarMensajes();
+        try
+        {
+            var ticket = await TicketService.ObtenerPorIdAsync(id);
+            if (ticket == null)
+            {
+                mensajeError = "El ticket seleccionado ya no existe.";
+                return;
+            }
+
+            ticketSeleccionado = ticket;
+            editandoId = ticket.Id;
+            formTitulo = ticket.Titulo;
+            formDescripcion = ticket.Descripcion;
+            formCategoriaId = ticket.CategoriaId;
+        }
+        catch (Exception)
+        {
+            mensajeError = "No se pudo consultar el ticket en MySQL.";
+        }
+    }
+
+    private void CancelarEdicion()
+    {
+        LimpiarMensajes();
+        LimpiarFormulario();
+    }
+
+    private async Task GuardarAsync()
+    {
+        LimpiarMensajes();
+
+        if (string.IsNullOrWhiteSpace(formTitulo))
+        {
+            mensajeError = "El título no puede estar vacío.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(formDescripcion))
+        {
+            mensajeError = "La descripción no puede estar vacía.";
+            return;
+        }
+
+        if (!categorias.Any(c => c.Id == formCategoriaId))
+        {
+            mensajeError = "Seleccione una categoría válida.";
+            return;
+        }
+
+        guardando = true;
+        try
+        {
+            var ticket = new Ticket
+            {
+                Id = editandoId ?? 0,
+                Titulo = formTitulo,
+                Descripcion = formDescripcion,
+                CategoriaId = formCategoriaId
+            };
+
+            if (editandoId == null)
+            {
+                var nuevoId = await TicketService.CrearAsync(ticket);
+                ticketSeleccionado =
+                    await TicketService.ObtenerPorIdAsync(nuevoId);
+                mensajeExito = $"Ticket #{nuevoId} registrado correctamente.";
+            }
+            else
+            {
+                var actualizado = await TicketService.ActualizarAsync(ticket);
+                if (!actualizado)
+                {
+                    mensajeError = "No se encontró el ticket a editar.";
+                    return;
+                }
+
+                mensajeExito = $"Ticket #{ticket.Id} actualizado correctamente.";
+            }
+
+            LimpiarFormulario();
+            await RecargarAsync();
+        }
+        catch (ArgumentException ex)
+        {
+            mensajeError = ex.Message;
+        }
+        catch (Exception)
+        {
+            mensajeError = "Ocurrió un error al guardar el ticket en MySQL.";
+        }
+        finally
+        {
+            guardando = false;
         }
     }
 }
